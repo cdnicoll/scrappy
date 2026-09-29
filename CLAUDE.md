@@ -20,6 +20,7 @@ Mac quick capture notes app. Electron, TypeScript, React, CodeMirror 6. Personal
 - `npm run build`: typecheck, then build to `out/`
 - `npm run typecheck`
 - `npm run lint`
+- `npm run package`: build, then write the unsigned `dist/mac-arm64/Scrappy.app` (ad hoc signature, arm64)
 - `npx install-electron`: fetch the Electron binary if `npm install` skipped it
 
 Development knobs for `npm run dev`: `SCRAPPY_HOTKEY`, `SCRAPPY_LEVEL` (`floating` or `screen-saver`), `SCRAPPY_HIDE_ON_BLUR=0`, `SCRAPPY_USER_DATA` (separate settings folder, for testing against a scratch vault).

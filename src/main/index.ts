@@ -54,7 +54,11 @@ const LEVEL: 'floating' | 'screen-saver' =
   process.env.SCRAPPY_LEVEL === 'screen-saver' ? 'screen-saver' : 'floating'
 const HIDE_ON_BLUR = process.env.SCRAPPY_HIDE_ON_BLUR !== '0'
 
-if (process.env.SCRAPPY_USER_DATA) app.setPath('userData', process.env.SCRAPPY_USER_DATA)
+// Pinned by name, so development and the packaged app share settings and draft.
+app.setPath(
+  'userData',
+  process.env.SCRAPPY_USER_DATA ?? join(app.getPath('appData'), 'scrappy'),
+)
 
 const PANEL_WIDTH = 520
 const PANEL_HEIGHT = 220
@@ -246,7 +250,11 @@ async function setHotkey(accelerator: unknown): Promise<SetHotkeyResult> {
 
 /** The login item only exists for the packaged app. In development this does nothing. */
 function applyLaunchAtLogin(): void {
-  if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin })
+  if (!app.isPackaged) return
+  // Only touch the login item when it differs. Removing one that is not there logs an error.
+  if (app.getLoginItemSettings().openAtLogin !== settings.launchAtLogin) {
+    app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin })
+  }
 }
 
 async function trashNote(filename: unknown): Promise<boolean> {
