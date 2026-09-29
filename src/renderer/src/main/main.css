@@ -1,0 +1,16 @@
+:root {
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+main {
+  padding: 24px;
+}
+
+.ok {
+  color: green;
+}
+
+.error {
+  color: red;
+}

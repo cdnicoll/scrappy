@@ -1,0 +1,36 @@
+:root {
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+.capture {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+  background: Canvas;
+  color: CanvasText;
+}
+
+.capture textarea {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: inherit;
+  font: 14px/1.5 ui-monospace, Menlo, monospace;
+}
+
+.capture footer {
+  font-size: 11px;
+  opacity: 0.5;
+}
