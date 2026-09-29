@@ -27,9 +27,11 @@ Spike knobs for `npm run dev`: `SCRAPPY_HOTKEY`, `SCRAPPY_LEVEL` (`floating` or 
 ## Layout
 
 - `src/main/index.ts`: main process. Windows, capture panel, global hotkey, IPC handlers.
+- `src/main/settings.ts`: settings JSON in the app data folder. `src/main/vault.ts`: note filenames and atomic writes.
 - `src/preload/index.ts`: typed API exposed as `window.scrappy`.
 - `src/shared/ipc.ts`: IPC channel names and payload types.
 - `src/renderer/index.html` and `src/renderer/src/main/`: main window.
+- `src/renderer/src/editor/`: CodeMirror editor shared by both windows.
 - `src/renderer/capture.html` and `src/renderer/src/capture/`: capture panel.
 
 ## Voice

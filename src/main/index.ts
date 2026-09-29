@@ -1,6 +1,10 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, screen } from 'electron'
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen } from 'electron'
+import { mkdir, readFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { Channels, type HotkeyStatus } from '../shared/ipc'
+import { Channels, type HotkeyStatus, type SubmitResult, type VaultStatus } from '../shared/ipc'
+import { loadSettings, saveSettings, writeFileAtomic, type Settings } from './settings'
+import { createNote, isDirectory } from './vault'
 
 // Spike knobs. Override from the shell to test variants without editing code:
 //   SCRAPPY_HOTKEY="Control+Alt+Space"
@@ -13,6 +17,14 @@ const HIDE_ON_BLUR = process.env.SCRAPPY_HIDE_ON_BLUR !== '0'
 
 const PANEL_WIDTH = 520
 const PANEL_HEIGHT = 220
+const MAX_NOTE_CHARS = 1_000_000
+const DEFAULT_VAULT = join(homedir(), 'Scrappy')
+
+// Settings and the capture draft live in the app data folder, never in the vault.
+const settingsFile = (): string => join(app.getPath('userData'), 'settings.json')
+const draftFile = (): string => join(app.getPath('userData'), 'capture-draft.md')
+
+let settings: Settings = { vaultPath: null }
 
 let panel: BrowserWindow | null = null
 let mainWindow: BrowserWindow | null = null
@@ -116,6 +128,86 @@ function togglePanel(): void {
   else showPanel()
 }
 
+function vaultStatus(): VaultStatus {
+  return { path: settings.vaultPath }
+}
+
+async function setVault(path: string): Promise<void> {
+  settings = { ...settings, vaultPath: path }
+  await saveSettings(settingsFile(), settings)
+  mainWindow?.webContents.send(Channels.vaultChanged, vaultStatus())
+}
+
+/** Folder picker. Returns true when the user picked a folder. */
+async function pickVaultFolder(): Promise<boolean> {
+  const options: Electron.OpenDialogOptions = {
+    title: 'Choose the Scrappy vault folder',
+    buttonLabel: 'Use this folder',
+    defaultPath: settings.vaultPath ?? homedir(),
+    properties: ['openDirectory', 'createDirectory'],
+  }
+  const result = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, options)
+    : await dialog.showOpenDialog(options)
+  const picked = result.filePaths[0]
+  if (result.canceled || !picked) return false
+  await setVault(picked)
+  return true
+}
+
+/** First launch, or the saved folder is gone: ask where notes should live. */
+async function promptForVault(): Promise<void> {
+  const missing = settings.vaultPath
+  const options: Electron.MessageBoxOptions = {
+    type: 'question',
+    message: missing ? 'The vault folder was not found' : 'Where should Scrappy keep your notes?',
+    detail: missing
+      ? `${missing} is missing. Pick a folder to keep notes in.`
+      : 'Notes are plain Markdown files in one folder.',
+    buttons: [`Use ${DEFAULT_VAULT}`, 'Choose folder', 'Later'],
+    defaultId: 0,
+    cancelId: 2,
+  }
+  const { response } = mainWindow
+    ? await dialog.showMessageBox(mainWindow, options)
+    : await dialog.showMessageBox(options)
+  if (response === 0) {
+    await mkdir(DEFAULT_VAULT, { recursive: true })
+    await setVault(DEFAULT_VAULT)
+  } else if (response === 1) {
+    await pickVaultFolder()
+  }
+}
+
+async function submitCapture(text: unknown): Promise<SubmitResult> {
+  if (typeof text !== 'string' || text.length > MAX_NOTE_CHARS) {
+    return { ok: false, error: 'Note is not valid text or is too large.' }
+  }
+  if (text.trim() === '') {
+    hidePanel()
+    return { ok: true, filename: null }
+  }
+  if (!settings.vaultPath) {
+    return { ok: false, error: 'No vault folder set. Open Scrappy to choose one.' }
+  }
+  try {
+    const filename = await createNote(settings.vaultPath, text)
+    await writeFileAtomic(draftFile(), '')
+    hidePanel()
+    return { ok: true, filename }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+async function readDraft(): Promise<string> {
+  try {
+    return await readFile(draftFile(), 'utf8')
+  } catch {
+    return ''
+  }
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -124,13 +216,21 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow.show()
   })
 
-  void app.whenReady().then(() => {
+  void app.whenReady().then(async () => {
+    settings = await loadSettings(settingsFile())
+
     ipcMain.handle(Channels.captureHide, () => hidePanel())
-    ipcMain.handle(Channels.captureSubmit, (_event, text: unknown) => {
-      // Step 1 has no vault. Log the length only so the spike proves the round trip.
-      const length = typeof text === 'string' ? text.trim().length : 0
-      console.log(`[scrappy] capture submitted, ${length} chars (not saved, vault is step 2)`)
-      hidePanel()
+    ipcMain.handle(Channels.captureSubmit, (_event, text: unknown) => submitCapture(text))
+    ipcMain.handle(Channels.draftGet, () => readDraft())
+    ipcMain.handle(Channels.draftSet, async (_event, text: unknown) => {
+      if (typeof text === 'string' && text.length <= MAX_NOTE_CHARS) {
+        await writeFileAtomic(draftFile(), text)
+      }
+    })
+    ipcMain.handle(Channels.vaultGet, () => vaultStatus())
+    ipcMain.handle(Channels.vaultChoose, async () => {
+      await pickVaultFolder()
+      return vaultStatus()
     })
     ipcMain.handle(
       Channels.hotkeyStatus,
@@ -148,6 +248,10 @@ if (!app.requestSingleInstanceLock()) {
     app.on('activate', () => {
       if (!mainWindow) mainWindow = createMainWindow()
     })
+
+    if (!settings.vaultPath || !(await isDirectory(settings.vaultPath))) {
+      await promptForVault()
+    }
   })
 
   app.on('before-quit', () => {

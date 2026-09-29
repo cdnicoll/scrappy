@@ -20,17 +20,12 @@ body,
   color: CanvasText;
 }
 
-.capture textarea {
-  flex: 1;
-  border: 0;
-  outline: 0;
-  resize: none;
-  background: transparent;
-  color: inherit;
-  font: 14px/1.5 ui-monospace, Menlo, monospace;
-}
-
 .capture footer {
   font-size: 11px;
   opacity: 0.5;
+}
+
+.capture footer.error {
+  color: red;
+  opacity: 1;
 }

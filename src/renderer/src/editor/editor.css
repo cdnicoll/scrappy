@@ -1,0 +1,43 @@
+.editor {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.editor .cm-editor {
+  height: 100%;
+  font: 14px/1.5 ui-monospace, Menlo, monospace;
+}
+
+.editor .cm-editor.cm-focused {
+  outline: none;
+}
+
+.editor .cm-content {
+  caret-color: CanvasText;
+}
+
+.editor .cm-cursor {
+  border-left-color: CanvasText;
+}
+
+.editor .cm-inline-code {
+  background: color-mix(in srgb, CanvasText 10%, transparent);
+  border-radius: 3px;
+}
+
+.editor .cm-code-keyword {
+  color: light-dark(#8250df, #d2a8ff);
+}
+
+.editor .cm-code-string {
+  color: light-dark(#0a3069, #a5d6ff);
+}
+
+.editor .cm-code-comment {
+  color: light-dark(#6e7781, #8b949e);
+}
+
+.editor .cm-code-number {
+  color: light-dark(#0550ae, #79c0ff);
+}
