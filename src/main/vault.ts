@@ -69,7 +69,7 @@ export function isNoteFilename(name: unknown): name is string {
   )
 }
 
-function notePath(vaultPath: string, filename: string): string {
+export function notePath(vaultPath: string, filename: string): string {
   if (!isNoteFilename(filename)) throw new Error(`Not a note filename: ${String(filename)}`)
   return join(vaultPath, filename)
 }
@@ -96,6 +96,8 @@ interface CacheEntry {
   size: number
   title: string
   preview: string
+  /** Lower cased full text, for the filter. */
+  body: string
 }
 
 // Summaries keyed by full path, reused while mtime and size are unchanged.
@@ -113,7 +115,13 @@ export async function listNotes(vaultPath: string): Promise<NoteSummary[]> {
         const info = await stat(path)
         let entry = summaryCache.get(path)
         if (!entry || entry.mtimeMs !== info.mtimeMs || entry.size !== info.size) {
-          entry = { mtimeMs: info.mtimeMs, size: info.size, ...summarize(await readFile(path, 'utf8')) }
+          const text = await readFile(path, 'utf8')
+          entry = {
+            mtimeMs: info.mtimeMs,
+            size: info.size,
+            body: text.toLowerCase(),
+            ...summarize(text),
+          }
           summaryCache.set(path, entry)
         }
         return { filename, title: entry.title, preview: entry.preview, mtimeMs: entry.mtimeMs }
@@ -126,4 +134,14 @@ export async function listNotes(vaultPath: string): Promise<NoteSummary[]> {
   return notes
     .filter((note): note is NoteSummary => note !== null)
     .sort((a, b) => b.mtimeMs - a.mtimeMs || b.filename.localeCompare(a.filename))
+}
+
+/** Filenames of notes whose text contains the query, case insensitive. */
+export async function searchNotes(vaultPath: string, query: string): Promise<string[]> {
+  const needle = query.trim().toLowerCase()
+  const notes = await listNotes(vaultPath)
+  if (needle === '') return notes.map((note) => note.filename)
+  return notes
+    .filter((note) => summaryCache.get(join(vaultPath, note.filename))?.body.includes(needle))
+    .map((note) => note.filename)
 }

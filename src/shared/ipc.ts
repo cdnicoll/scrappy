@@ -8,27 +8,41 @@ export const Channels = {
   notesRead: 'notes:read',
   notesWrite: 'notes:write',
   notesCreate: 'notes:create',
+  notesSearch: 'notes:search',
+  notesTrash: 'notes:trash',
   notesChanged: 'notes:changed',
   captureHide: 'capture:hide',
   captureSubmit: 'capture:submit',
   captureShown: 'capture:shown',
   draftGet: 'draft:get',
   draftSet: 'draft:set',
-  hotkeyStatus: 'hotkey:status',
-  vaultGet: 'vault:get',
   vaultChoose: 'vault:choose',
-  vaultChanged: 'vault:changed',
+  prefsGet: 'prefs:get',
+  prefsSetHotkey: 'prefs:set-hotkey',
+  prefsSetLaunchAtLogin: 'prefs:set-launch-at-login',
+  prefsChanged: 'prefs:changed',
+  commandTake: 'command:take',
+  command: 'command',
 } as const
 
 export interface HotkeyStatus {
   accelerator: string
+  /** False when another app owns the shortcut. */
   registered: boolean
 }
 
-export interface VaultStatus {
-  /** Absolute path of the vault folder, or null when none is set. */
-  path: string | null
+export interface Preferences {
+  vaultPath: string | null
+  hotkey: HotkeyStatus
+  launchAtLogin: boolean
+  /** False in development: the login item only works in the packaged app. */
+  launchAtLoginActive: boolean
 }
+
+export type SetHotkeyResult = { ok: true } | { ok: false; error: string }
+
+/** Actions started from the menu bar or app menu, carried out by the main window. */
+export type AppCommand = 'new-note' | 'preferences'
 
 export interface NotesChanged {
   /** The full list, newest first. */
@@ -39,7 +53,10 @@ export interface NotesChanged {
 
 export type SubmitResult = { ok: true; filename: string | null } | { ok: false; error: string }
 
+type Unsubscribe = () => void
+
 export interface ScrappyApi {
+  // Capture panel
   /** Hide the capture panel. The draft stays. */
   hideCapture(): Promise<void>
   /**
@@ -47,21 +64,32 @@ export interface ScrappyApi {
    * Empty text writes nothing and returns a null filename.
    */
   submitCapture(text: string): Promise<SubmitResult>
-  /** Fires each time the panel is shown. Returns an unsubscribe function. */
-  onCaptureShown(callback: () => void): () => void
+  onCaptureShown(callback: () => void): Unsubscribe
   getDraft(): Promise<string>
   setDraft(text: string): Promise<void>
+
+  // Notes
   listNotes(): Promise<NoteSummary[]>
   readNote(filename: string): Promise<string>
   writeNote(filename: string, text: string): Promise<void>
   /** Create an empty note and return its filename. */
   createNote(): Promise<string>
-  /** Fires when the vault contents change. Returns an unsubscribe function. */
-  onNotesChanged(callback: (change: NotesChanged) => void): () => void
-  getHotkeyStatus(): Promise<HotkeyStatus>
-  getVault(): Promise<VaultStatus>
-  /** Open the folder picker. Resolves with the vault after the user picks or cancels. */
-  chooseVault(): Promise<VaultStatus>
-  /** Fires when the vault folder changes. Returns an unsubscribe function. */
-  onVaultChanged(callback: (status: VaultStatus) => void): () => void
+  /** Filenames of notes whose title or body contains the text, case insensitive. */
+  searchNotes(query: string): Promise<string[]>
+  /** Ask to confirm, then move the note to the Trash. False when cancelled. */
+  trashNote(filename: string): Promise<boolean>
+  onNotesChanged(callback: (change: NotesChanged) => void): Unsubscribe
+
+  // Preferences
+  getPreferences(): Promise<Preferences>
+  /** Open the folder picker. The result arrives through onPreferencesChanged. */
+  chooseVault(): Promise<void>
+  setHotkey(accelerator: string): Promise<SetHotkeyResult>
+  setLaunchAtLogin(enabled: boolean): Promise<void>
+  onPreferencesChanged(callback: (preferences: Preferences) => void): Unsubscribe
+
+  // Commands from the menu bar and app menu
+  /** A command issued before this window was ready, if any. */
+  takePendingCommand(): Promise<AppCommand | null>
+  onCommand(callback: (command: AppCommand) => void): Unsubscribe
 }

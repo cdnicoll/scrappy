@@ -1,10 +1,16 @@
 import { useEffect, useImperativeHandle, useRef, type Ref } from 'react'
-import { EditorState, Prec } from '@codemirror/state'
-import { EditorView, keymap, placeholder, type KeyBinding } from '@codemirror/view'
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { EditorSelection, EditorState, Prec, countColumn } from '@codemirror/state'
+import { EditorView, keymap, placeholder, type Command, type KeyBinding } from '@codemirror/view'
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentLess,
+  indentMore,
+} from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
-import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { HighlightStyle, indentUnit, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import './editor.css'
 
@@ -25,6 +31,32 @@ interface EditorProps {
   keys?: readonly KeyBinding[]
   onChange?: (text: string) => void
 }
+
+const INDENT = 4
+
+/**
+ * Tab with no selection inserts spaces up to the next tab stop, at the cursor.
+ * With a selection it indents the selected lines.
+ */
+const insertSoftTab: Command = (view) => {
+  const { state } = view
+  if (state.selection.ranges.some((range) => !range.empty)) return indentMore(view)
+  view.dispatch(
+    state.changeByRange((range) => {
+      const line = state.doc.lineAt(range.head)
+      const column = countColumn(line.text, state.tabSize, range.head - line.from)
+      const width = INDENT - (column % INDENT)
+      return {
+        changes: { from: range.head, insert: ' '.repeat(width) },
+        range: EditorSelection.cursor(range.head + width),
+      }
+    }),
+    { scrollIntoView: true, userEvent: 'input' },
+  )
+  return true
+}
+
+const tabKeymap: KeyBinding[] = [{ key: 'Tab', run: insertSoftTab, shift: indentLess }]
 
 // Light inline styling only: the text stays Markdown source.
 const markdownStyle = HighlightStyle.define([
@@ -59,7 +91,8 @@ export function Editor({ ref, placeholderText, keys, onChange }: EditorProps) {
       extensions: [
         Prec.highest(keymap.of([...(keysRef.current ?? [])])),
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        indentUnit.of(' '.repeat(INDENT)),
+        keymap.of([...tabKeymap, ...defaultKeymap, ...historyKeymap]),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         syntaxHighlighting(markdownStyle),
         EditorView.lineWrapping,

@@ -162,3 +162,97 @@ main {
 .error {
   color: red;
 }
+
+.sidebar .filter {
+  margin: 8px 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.row:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: -2px;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 35%);
+}
+
+.preferences {
+  width: 460px;
+  padding: 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: Canvas;
+  box-shadow: 0 10px 40px rgb(0 0 0 / 30%);
+}
+
+.preferences h1 {
+  margin: 0 0 16px;
+  font-size: 15px;
+}
+
+.preferences .field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+
+.preferences .label {
+  width: 120px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.preferences .value {
+  flex: 1;
+  min-width: 0;
+}
+
+.preferences .path {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.preferences .hotkey {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.preferences .hotkey.recording {
+  border-color: Highlight;
+  color: var(--muted);
+}
+
+.preferences .error,
+.preferences .hint {
+  margin: 2px 0 6px 130px;
+  font-size: 11px;
+}
+
+.preferences .hint {
+  color: var(--muted);
+}
+
+.preferences footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}

@@ -3,6 +3,8 @@ import { dayLabel, type NoteSummary } from '../../../shared/notes'
 interface SidebarProps {
   notes: NoteSummary[]
   selected: string | null
+  filter: string
+  onFilter: (text: string) => void
   onSelect: (filename: string) => void
   onNew: () => void
 }
@@ -25,7 +27,7 @@ function groupByDay(notes: NoteSummary[]): DayGroup[] {
   return groups
 }
 
-export function Sidebar({ notes, selected, onSelect, onNew }: SidebarProps) {
+export function Sidebar({ notes, selected, filter, onFilter, onSelect, onNew }: SidebarProps) {
   return (
     <nav className="sidebar">
       <header>
@@ -34,8 +36,22 @@ export function Sidebar({ notes, selected, onSelect, onNew }: SidebarProps) {
           +
         </button>
       </header>
+      <input
+        className="filter"
+        type="search"
+        placeholder="Filter"
+        aria-label="Filter notes"
+        spellCheck={false}
+        value={filter}
+        onChange={(event) => onFilter(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onFilter('')
+        }}
+      />
       <div className="list">
-        {notes.length === 0 && <p className="empty">No notes yet</p>}
+        {notes.length === 0 && (
+          <p className="empty">{filter.trim() === '' ? 'No notes yet' : 'No matches'}</p>
+        )}
         {groupByDay(notes).map((group) => (
           <section key={group.label}>
             <h2>{group.label}</h2>

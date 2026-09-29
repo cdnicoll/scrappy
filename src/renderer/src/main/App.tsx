@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { HotkeyStatus, NotesChanged, VaultStatus } from '../../../shared/ipc'
+import type { AppCommand, NotesChanged, Preferences } from '../../../shared/ipc'
 import type { NoteSummary } from '../../../shared/notes'
 import { Editor, type EditorHandle } from '../editor/Editor'
+import { PreferencesPane } from './PreferencesPane'
 import { Sidebar } from './Sidebar'
 
 const AUTOSAVE_DELAY_MS = 500
@@ -15,9 +16,12 @@ interface PendingSave {
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
 export function App() {
-  const [hotkey, setHotkey] = useState<HotkeyStatus | null>(null)
-  const [vault, setVault] = useState<VaultStatus | null>(null)
+  const [preferences, setPreferences] = useState<Preferences | null>(null)
+  const [showPreferences, setShowPreferences] = useState(false)
   const [notes, setNotes] = useState<NoteSummary[]>([])
+  const [filter, setFilter] = useState('')
+  /** Filenames matching the filter, or null when the filter is empty. */
+  const [matches, setMatches] = useState<Set<string> | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -55,7 +59,6 @@ export function App() {
         // Ignore the result if another note was opened while this one loaded.
         if (selectedRef.current !== filename) return
         editorRef.current?.setText(text)
-        editorRef.current?.focus()
         setError(null)
       } catch (caught) {
         if (selectedRef.current === filename) select(null)
@@ -68,7 +71,9 @@ export function App() {
   const newNote = useCallback(async (): Promise<void> => {
     try {
       await flush()
+      setFilter('') // An empty note matches no filter text.
       await openNote(await window.scrappy.createNote())
+      editorRef.current?.focus()
     } catch (caught) {
       setError(`Could not create a note: ${message(caught)}`)
     }
@@ -105,24 +110,68 @@ export function App() {
     [select],
   )
 
+  const trashSelected = useCallback(async (): Promise<void> => {
+    const filename = selectedRef.current
+    if (!filename) return
+    try {
+      // Save first, so the copy in the Trash has the latest text.
+      await flush()
+      await window.scrappy.trashNote(filename)
+    } catch (caught) {
+      setError(`Could not move ${filename} to the Trash: ${message(caught)}`)
+    }
+  }, [flush])
+
+  const runCommand = useCallback(
+    (command: AppCommand | null): void => {
+      if (command === 'new-note') void newNote()
+      if (command === 'preferences') setShowPreferences(true)
+    },
+    [newNote],
+  )
+
   useEffect(() => {
-    void window.scrappy.getHotkeyStatus().then(setHotkey)
-    void window.scrappy.getVault().then(setVault)
+    void window.scrappy.getPreferences().then(setPreferences)
     void window.scrappy.listNotes().then(setNotes)
-    const stopVault = window.scrappy.onVaultChanged(setVault)
+    const stopPreferences = window.scrappy.onPreferencesChanged(setPreferences)
     const stopNotes = window.scrappy.onNotesChanged(onNotesChanged)
     return () => {
-      stopVault()
+      stopPreferences()
       stopNotes()
     }
   }, [onNotesChanged])
 
   useEffect(() => {
+    void window.scrappy.takePendingCommand().then(runCommand)
+    return window.scrappy.onCommand(runCommand)
+  }, [runCommand])
+
+  // Re-run the filter when its text or the notes change.
+  useEffect(() => {
+    if (filter.trim() === '') {
+      setMatches(null)
+      return
+    }
+    let cancelled = false
+    void window.scrappy
+      .searchNotes(filter)
+      .then((filenames) => {
+        if (!cancelled) setMatches(new Set(filenames))
+      })
+      .catch((caught: unknown) => setError(`Could not filter: ${message(caught)}`))
+    return () => {
+      cancelled = true
+    }
+  }, [filter, notes])
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.metaKey && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'n') {
-        event.preventDefault()
-        void newNote()
-      }
+      if (event.key !== 'Backspace' || !event.metaKey) return
+      // In the editor or a text field, Cmd+Backspace deletes text.
+      const focused = document.activeElement
+      if (focused?.closest('.cm-editor, input, textarea, .overlay')) return
+      event.preventDefault()
+      void trashSelected()
     }
     const onUnload = (): void => void flush()
     window.addEventListener('keydown', onKeyDown)
@@ -131,7 +180,7 @@ export function App() {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('beforeunload', onUnload)
     }
-  }, [newNote, flush])
+  }, [trashSelected, flush])
 
   function onEditorChange(text: string): void {
     const filename = selectedRef.current
@@ -147,17 +196,20 @@ export function App() {
   async function chooseVault(): Promise<void> {
     // Save to the current vault before it changes.
     await flush()
-    setVault(await window.scrappy.chooseVault())
+    await window.scrappy.chooseVault()
   }
 
-  const hasVault = Boolean(vault?.path)
+  const hasVault = Boolean(preferences?.vaultPath)
+  const visibleNotes = matches ? notes.filter((note) => matches.has(note.filename)) : notes
 
   return (
     <div className="app">
       <div className="panes">
         <Sidebar
-          notes={notes}
+          notes={visibleNotes}
           selected={selected}
+          filter={filter}
+          onFilter={setFilter}
           onSelect={(filename) => void openNote(filename)}
           onNew={() => void newNote()}
         />
@@ -167,7 +219,7 @@ export function App() {
           </div>
           {!selected && (
             <div className="empty-state">
-              {vault && !hasVault ? (
+              {preferences && !hasVault ? (
                 <button onClick={() => void chooseVault()}>Choose vault folder</button>
               ) : (
                 <p>Select a note, or press Cmd+N</p>
@@ -178,16 +230,23 @@ export function App() {
       </div>
       <footer>
         {error && <span className="error">{error}</span>}
-        {hotkey && !hotkey.registered && (
+        {preferences && !preferences.hotkey.registered && (
           <span className="error">
-            Hotkey {hotkey.accelerator} failed to register. Another app owns it.
+            Hotkey {preferences.hotkey.accelerator} is taken by another app. Change it in
+            Preferences.
           </span>
         )}
-        <span className="vault" title={vault?.path ?? undefined}>
-          {vault?.path ?? 'No vault folder'}
+        <span className="vault" title={preferences?.vaultPath ?? undefined}>
+          {preferences?.vaultPath ?? 'No vault folder'}
         </span>
-        <button onClick={() => void chooseVault()}>Change</button>
       </footer>
+      {showPreferences && preferences && (
+        <PreferencesPane
+          preferences={preferences}
+          onChooseVault={() => void chooseVault()}
+          onClose={() => setShowPreferences(false)}
+        />
+      )}
     </div>
   )
 }

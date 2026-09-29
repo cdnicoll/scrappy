@@ -22,15 +22,16 @@ Mac quick capture notes app. Electron, TypeScript, React, CodeMirror 6. Personal
 - `npm run lint`
 - `npx install-electron`: fetch the Electron binary if `npm install` skipped it
 
-Spike knobs for `npm run dev`: `SCRAPPY_HOTKEY`, `SCRAPPY_LEVEL` (`floating` or `screen-saver`), `SCRAPPY_HIDE_ON_BLUR=0`, `SCRAPPY_USER_DATA` (separate settings folder, for testing against a scratch vault).
+Development knobs for `npm run dev`: `SCRAPPY_HOTKEY`, `SCRAPPY_LEVEL` (`floating` or `screen-saver`), `SCRAPPY_HIDE_ON_BLUR=0`, `SCRAPPY_USER_DATA` (separate settings folder, for testing against a scratch vault).
 
 ## Layout
 
-- `src/main/index.ts`: main process. Windows, capture panel, global hotkey, IPC handlers.
+- `src/main/index.ts`: main process. Windows, capture panel, global hotkey, menu bar icon, app menu, IPC handlers.
 - `src/main/settings.ts`: settings JSON in the app data folder. `src/main/vault.ts`: list, read, and atomic writes of notes. `src/main/watcher.ts`: chokidar watch on the vault.
 - `src/preload/index.ts`: typed API exposed as `window.scrappy`.
-- `src/shared/ipc.ts`: IPC channel names and payload types. `src/shared/notes.ts`: title, preview, and day label helpers.
+- `src/shared/ipc.ts`: IPC channel names and payload types. `src/shared/notes.ts`: title, preview, and day label helpers. `src/shared/accelerator.ts`: hotkey strings.
 - `src/renderer/index.html` and `src/renderer/src/main/`: main window.
+- `resources/`: menu bar template icon, and `make-icon.mjs` which draws it.
 - `src/renderer/src/editor/`: CodeMirror editor shared by both windows.
 - `src/renderer/capture.html` and `src/renderer/src/capture/`: capture panel.
 

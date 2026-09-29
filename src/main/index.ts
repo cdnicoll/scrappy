@@ -1,24 +1,55 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  Menu,
+  nativeImage,
+  screen,
+  shell,
+  Tray,
+} from 'electron'
+import { readFileSync } from 'node:fs'
 import { mkdir, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import trayIconPath from '../../resources/iconTemplate.png?asset'
+import trayIcon2xPath from '../../resources/iconTemplate@2x.png?asset'
+import { isValidAccelerator } from '../shared/accelerator'
 import {
   Channels,
-  type HotkeyStatus,
+  type AppCommand,
   type NotesChanged,
+  type Preferences,
+  type SetHotkeyResult,
   type SubmitResult,
-  type VaultStatus,
 } from '../shared/ipc'
-import { loadSettings, saveSettings, writeFileAtomic, type Settings } from './settings'
-import { createNote, isDirectory, isNoteFilename, listNotes, readNote, writeNote } from './vault'
+import {
+  defaultSettings,
+  loadSettings,
+  saveSettings,
+  writeFileAtomic,
+  type Settings,
+} from './settings'
+import {
+  createNote,
+  isDirectory,
+  isNoteFilename,
+  listNotes,
+  notePath,
+  readNote,
+  searchNotes,
+  writeNote,
+} from './vault'
 import { watchVault, type VaultWatcher } from './watcher'
 
-// Spike knobs. Override from the shell to test variants without editing code:
-//   SCRAPPY_HOTKEY="Control+Alt+Space"
+// Development knobs. Override from the shell to test variants without editing code:
+//   SCRAPPY_HOTKEY="Control+Alt+Space" wins over the saved hotkey, and is never saved
 //   SCRAPPY_LEVEL="floating" | "screen-saver"
 //   SCRAPPY_HIDE_ON_BLUR="0" to keep the panel open when it loses focus
 //   SCRAPPY_USER_DATA="/some/folder" to keep settings and draft apart from the real ones
-const HOTKEY = process.env.SCRAPPY_HOTKEY ?? 'Control+Alt+Space'
+const HOTKEY_OVERRIDE = process.env.SCRAPPY_HOTKEY
 const LEVEL: 'floating' | 'screen-saver' =
   process.env.SCRAPPY_LEVEL === 'screen-saver' ? 'screen-saver' : 'floating'
 const HIDE_ON_BLUR = process.env.SCRAPPY_HIDE_ON_BLUR !== '0'
@@ -36,13 +67,16 @@ const OWN_WRITE_WINDOW_MS = 2000
 const settingsFile = (): string => join(app.getPath('userData'), 'settings.json')
 const draftFile = (): string => join(app.getPath('userData'), 'capture-draft.md')
 
-let settings: Settings = { vaultPath: null }
+let settings: Settings = { ...defaultSettings }
 let watcher: VaultWatcher | null = null
 const ownWrites = new Map<string, number>()
 
 let panel: BrowserWindow | null = null
 let mainWindow: BrowserWindow | null = null
-let hotkeyRegistered = false
+let tray: Tray | null = null
+/** The accelerator currently held, or null when registration failed. */
+let activeHotkey: string | null = null
+let pendingCommand: AppCommand | null = null
 let quitting = false
 
 const securePrefs = {
@@ -144,8 +178,150 @@ function togglePanel(): void {
   else showPanel()
 }
 
-function vaultStatus(): VaultStatus {
-  return { path: settings.vaultPath }
+function showMainWindow(): BrowserWindow {
+  if (!mainWindow) mainWindow = createMainWindow()
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+  return mainWindow
+}
+
+/** Bring the main window forward and have it carry out a command. */
+function sendCommand(command: AppCommand): void {
+  const existed = mainWindow !== null
+  const win = showMainWindow()
+  if (existed && !win.webContents.isLoading()) {
+    win.webContents.send(Channels.command, command)
+  } else {
+    // The window collects this once its page is ready.
+    pendingCommand = command
+  }
+}
+
+function wantedHotkey(): string {
+  return HOTKEY_OVERRIDE ?? settings.hotkey
+}
+
+function tryRegister(accelerator: string): boolean {
+  try {
+    return globalShortcut.register(accelerator, togglePanel)
+  } catch {
+    return false // Electron throws on accelerators it cannot parse.
+  }
+}
+
+function preferences(): Preferences {
+  return {
+    vaultPath: settings.vaultPath,
+    hotkey: { accelerator: wantedHotkey(), registered: activeHotkey === wantedHotkey() },
+    launchAtLogin: settings.launchAtLogin,
+    launchAtLoginActive: app.isPackaged,
+  }
+}
+
+async function updateSettings(change: Partial<Settings>): Promise<void> {
+  settings = { ...settings, ...change }
+  await saveSettings(settingsFile(), settings)
+  mainWindow?.webContents.send(Channels.prefsChanged, preferences())
+}
+
+async function setHotkey(accelerator: unknown): Promise<SetHotkeyResult> {
+  if (!isValidAccelerator(accelerator)) {
+    return { ok: false, error: 'Use Control, Option or Command with one other key.' }
+  }
+  if (HOTKEY_OVERRIDE) {
+    return { ok: false, error: 'The hotkey is fixed by SCRAPPY_HOTKEY for this run.' }
+  }
+  if (accelerator !== activeHotkey) {
+    // Take the new one first, so a failure leaves the old hotkey working.
+    if (!tryRegister(accelerator)) {
+      return { ok: false, error: `${accelerator} is taken by another app.` }
+    }
+    if (activeHotkey) globalShortcut.unregister(activeHotkey)
+    activeHotkey = accelerator
+  }
+  await updateSettings({ hotkey: accelerator })
+  return { ok: true }
+}
+
+/** The login item only exists for the packaged app. In development this does nothing. */
+function applyLaunchAtLogin(): void {
+  if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin })
+}
+
+async function trashNote(filename: unknown): Promise<boolean> {
+  if (!isNoteFilename(filename)) throw new Error('Not a note filename.')
+  const vaultPath = requireVault()
+  const title = (await listNotes(vaultPath)).find((note) => note.filename === filename)?.title
+  if (title === undefined) throw new Error(`Note not found: ${filename}`)
+
+  const options: Electron.MessageBoxOptions = {
+    type: 'warning',
+    message: `Move "${title}" to the Trash?`,
+    detail: filename,
+    buttons: ['Move to Trash', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+  }
+  const { response } = mainWindow
+    ? await dialog.showMessageBox(mainWindow, options)
+    : await dialog.showMessageBox(options)
+  if (response !== 0) return false
+
+  await shell.trashItem(notePath(vaultPath, filename))
+  await pushNotes()
+  return true
+}
+
+function createTray(): Tray {
+  const icon = nativeImage.createFromPath(trayIconPath)
+  icon.addRepresentation({ scaleFactor: 2, buffer: readFileSync(trayIcon2xPath) })
+  icon.setTemplateImage(true)
+  const created = new Tray(icon)
+  created.setToolTip('Scrappy')
+  created.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'New capture', click: () => showPanel() },
+      { label: 'Open Scrappy', click: () => void showMainWindow() },
+      { label: 'Preferences', click: () => sendCommand('preferences') },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() },
+    ]),
+  )
+  return created
+}
+
+function createAppMenu(): Menu {
+  return Menu.buildFromTemplate([
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { label: 'Preferences…', accelerator: 'Command+,', click: () => sendCommand('preferences') },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'File',
+      submenu: [
+        { label: 'New Note', accelerator: 'Command+N', click: () => sendCommand('new-note') },
+        { label: 'New Capture', click: () => showPanel() },
+        { type: 'separator' },
+        { role: 'close' },
+      ],
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+  ])
 }
 
 function requireVault(): string {
@@ -189,9 +365,8 @@ async function startWatching(): Promise<void> {
 
 async function setVault(path: string): Promise<void> {
   settings = { ...settings, vaultPath: path }
-  await saveSettings(settingsFile(), settings)
   await startWatching()
-  mainWindow?.webContents.send(Channels.vaultChanged, vaultStatus())
+  await updateSettings({})
   await pushNotes()
 }
 
@@ -270,10 +445,7 @@ async function readDraft(): Promise<string> {
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
-    if (!mainWindow) mainWindow = createMainWindow()
-    mainWindow.show()
-  })
+  app.on('second-instance', () => void showMainWindow())
 
   void app.whenReady().then(async () => {
     settings = await loadSettings(settingsFile())
@@ -309,22 +481,40 @@ if (!app.requestSingleInstanceLock()) {
       await pushNotes()
       return filename
     })
-    ipcMain.handle(Channels.vaultGet, () => vaultStatus())
+    ipcMain.handle(Channels.notesSearch, (_event, query: unknown) =>
+      settings.vaultPath && typeof query === 'string'
+        ? searchNotes(settings.vaultPath, query)
+        : [],
+    )
+    ipcMain.handle(Channels.notesTrash, (_event, filename: unknown) => trashNote(filename))
     ipcMain.handle(Channels.vaultChoose, async () => {
       await pickVaultFolder()
-      return vaultStatus()
     })
-    ipcMain.handle(
-      Channels.hotkeyStatus,
-      (): HotkeyStatus => ({ accelerator: HOTKEY, registered: hotkeyRegistered }),
+    ipcMain.handle(Channels.prefsGet, () => preferences())
+    ipcMain.handle(Channels.prefsSetHotkey, (_event, accelerator: unknown) =>
+      setHotkey(accelerator),
     )
+    ipcMain.handle(Channels.prefsSetLaunchAtLogin, async (_event, enabled: unknown) => {
+      if (typeof enabled !== 'boolean') return
+      await updateSettings({ launchAtLogin: enabled })
+      applyLaunchAtLogin()
+    })
+    ipcMain.handle(Channels.commandTake, () => {
+      const command = pendingCommand
+      pendingCommand = null
+      return command
+    })
 
+    Menu.setApplicationMenu(createAppMenu())
     panel = createPanel()
     mainWindow = createMainWindow()
+    tray = createTray()
+    applyLaunchAtLogin()
 
-    hotkeyRegistered = globalShortcut.register(HOTKEY, togglePanel)
+    const hotkey = wantedHotkey()
+    activeHotkey = tryRegister(hotkey) ? hotkey : null
     console.log(
-      `[scrappy] hotkey ${HOTKEY} ${hotkeyRegistered ? 'registered' : 'FAILED to register (taken by another app?)'}, level ${LEVEL}`,
+      `[scrappy] hotkey ${hotkey} ${activeHotkey ? 'registered' : 'FAILED to register (taken by another app?)'}, level ${LEVEL}`,
     )
 
     app.on('activate', () => {
@@ -348,5 +538,6 @@ if (!app.requestSingleInstanceLock()) {
   app.on('will-quit', () => {
     globalShortcut.unregisterAll()
     void watcher?.close()
+    tray?.destroy()
   })
 }
