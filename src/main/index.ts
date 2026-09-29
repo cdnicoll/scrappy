@@ -2,29 +2,43 @@ import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen } from 'ele
 import { mkdir, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { Channels, type HotkeyStatus, type SubmitResult, type VaultStatus } from '../shared/ipc'
+import {
+  Channels,
+  type HotkeyStatus,
+  type NotesChanged,
+  type SubmitResult,
+  type VaultStatus,
+} from '../shared/ipc'
 import { loadSettings, saveSettings, writeFileAtomic, type Settings } from './settings'
-import { createNote, isDirectory } from './vault'
+import { createNote, isDirectory, isNoteFilename, listNotes, readNote, writeNote } from './vault'
+import { watchVault, type VaultWatcher } from './watcher'
 
 // Spike knobs. Override from the shell to test variants without editing code:
 //   SCRAPPY_HOTKEY="Control+Alt+Space"
 //   SCRAPPY_LEVEL="floating" | "screen-saver"
 //   SCRAPPY_HIDE_ON_BLUR="0" to keep the panel open when it loses focus
+//   SCRAPPY_USER_DATA="/some/folder" to keep settings and draft apart from the real ones
 const HOTKEY = process.env.SCRAPPY_HOTKEY ?? 'Control+Alt+Space'
 const LEVEL: 'floating' | 'screen-saver' =
   process.env.SCRAPPY_LEVEL === 'screen-saver' ? 'screen-saver' : 'floating'
 const HIDE_ON_BLUR = process.env.SCRAPPY_HIDE_ON_BLUR !== '0'
 
+if (process.env.SCRAPPY_USER_DATA) app.setPath('userData', process.env.SCRAPPY_USER_DATA)
+
 const PANEL_WIDTH = 520
 const PANEL_HEIGHT = 220
 const MAX_NOTE_CHARS = 1_000_000
 const DEFAULT_VAULT = join(homedir(), 'Scrappy')
+// Watcher events this soon after our own write to a file are ours, not external.
+const OWN_WRITE_WINDOW_MS = 2000
 
 // Settings and the capture draft live in the app data folder, never in the vault.
 const settingsFile = (): string => join(app.getPath('userData'), 'settings.json')
 const draftFile = (): string => join(app.getPath('userData'), 'capture-draft.md')
 
 let settings: Settings = { vaultPath: null }
+let watcher: VaultWatcher | null = null
+const ownWrites = new Map<string, number>()
 
 let panel: BrowserWindow | null = null
 let mainWindow: BrowserWindow | null = null
@@ -90,8 +104,10 @@ function createPanel(): BrowserWindow {
 
 function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 900,
-    height: 600,
+    width: 960,
+    height: 640,
+    minWidth: 640,
+    minHeight: 400,
     title: 'Scrappy',
     webPreferences: securePrefs,
   })
@@ -132,10 +148,51 @@ function vaultStatus(): VaultStatus {
   return { path: settings.vaultPath }
 }
 
+function requireVault(): string {
+  if (!settings.vaultPath) throw new Error('No vault folder set.')
+  return settings.vaultPath
+}
+
+/** Send the current note list to the main window, if it is open. */
+async function pushNotes(external: string[] = []): Promise<void> {
+  if (!mainWindow || !settings.vaultPath) return
+  try {
+    const change: NotesChanged = { notes: await listNotes(settings.vaultPath), external }
+    mainWindow?.webContents.send(Channels.notesChanged, change)
+  } catch (error) {
+    console.error('[scrappy] could not list notes', error)
+  }
+}
+
+function markOwnWrite(filename: string): void {
+  ownWrites.set(filename, Date.now())
+}
+
+function isOwnWrite(filename: string): boolean {
+  const at = ownWrites.get(filename)
+  if (at === undefined) return false
+  if (Date.now() - at < OWN_WRITE_WINDOW_MS) return true
+  ownWrites.delete(filename)
+  return false
+}
+
+async function startWatching(): Promise<void> {
+  await watcher?.close()
+  watcher = null
+  ownWrites.clear()
+  const vaultPath = settings.vaultPath
+  if (!vaultPath || !(await isDirectory(vaultPath))) return
+  watcher = watchVault(vaultPath, (filenames) => {
+    void pushNotes(filenames.filter((filename) => !isOwnWrite(filename)))
+  })
+}
+
 async function setVault(path: string): Promise<void> {
   settings = { ...settings, vaultPath: path }
   await saveSettings(settingsFile(), settings)
+  await startWatching()
   mainWindow?.webContents.send(Channels.vaultChanged, vaultStatus())
+  await pushNotes()
 }
 
 /** Folder picker. Returns true when the user picked a folder. */
@@ -192,8 +249,10 @@ async function submitCapture(text: unknown): Promise<SubmitResult> {
   }
   try {
     const filename = await createNote(settings.vaultPath, text)
+    markOwnWrite(filename)
     await writeFileAtomic(draftFile(), '')
     hidePanel()
+    void pushNotes()
     return { ok: true, filename }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -227,6 +286,29 @@ if (!app.requestSingleInstanceLock()) {
         await writeFileAtomic(draftFile(), text)
       }
     })
+    ipcMain.handle(Channels.notesList, () =>
+      settings.vaultPath ? listNotes(settings.vaultPath) : [],
+    )
+    ipcMain.handle(Channels.notesRead, (_event, filename: unknown) => {
+      if (!isNoteFilename(filename)) throw new Error('Not a note filename.')
+      return readNote(requireVault(), filename)
+    })
+    ipcMain.handle(Channels.notesWrite, async (_event, filename: unknown, text: unknown) => {
+      if (!isNoteFilename(filename)) throw new Error('Not a note filename.')
+      if (typeof text !== 'string' || text.length > MAX_NOTE_CHARS) {
+        throw new Error('Note is not valid text or is too large.')
+      }
+      markOwnWrite(filename)
+      await writeNote(requireVault(), filename, text)
+      markOwnWrite(filename)
+      void pushNotes()
+    })
+    ipcMain.handle(Channels.notesCreate, async () => {
+      const filename = await createNote(requireVault(), '')
+      markOwnWrite(filename)
+      await pushNotes()
+      return filename
+    })
     ipcMain.handle(Channels.vaultGet, () => vaultStatus())
     ipcMain.handle(Channels.vaultChoose, async () => {
       await pickVaultFolder()
@@ -251,6 +333,8 @@ if (!app.requestSingleInstanceLock()) {
 
     if (!settings.vaultPath || !(await isDirectory(settings.vaultPath))) {
       await promptForVault()
+    } else {
+      await startWatching()
     }
   })
 
@@ -263,5 +347,6 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('will-quit', () => {
     globalShortcut.unregisterAll()
+    void watcher?.close()
   })
 }

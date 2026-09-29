@@ -1,7 +1,14 @@
 // Single source for IPC channel names and payloads.
 // Main and preload both import from here so they cannot drift.
 
+import type { NoteSummary } from './notes'
+
 export const Channels = {
+  notesList: 'notes:list',
+  notesRead: 'notes:read',
+  notesWrite: 'notes:write',
+  notesCreate: 'notes:create',
+  notesChanged: 'notes:changed',
   captureHide: 'capture:hide',
   captureSubmit: 'capture:submit',
   captureShown: 'capture:shown',
@@ -23,6 +30,13 @@ export interface VaultStatus {
   path: string | null
 }
 
+export interface NotesChanged {
+  /** The full list, newest first. */
+  notes: NoteSummary[]
+  /** Files changed by something other than Scrappy since the last push. */
+  external: string[]
+}
+
 export type SubmitResult = { ok: true; filename: string | null } | { ok: false; error: string }
 
 export interface ScrappyApi {
@@ -37,6 +51,13 @@ export interface ScrappyApi {
   onCaptureShown(callback: () => void): () => void
   getDraft(): Promise<string>
   setDraft(text: string): Promise<void>
+  listNotes(): Promise<NoteSummary[]>
+  readNote(filename: string): Promise<string>
+  writeNote(filename: string, text: string): Promise<void>
+  /** Create an empty note and return its filename. */
+  createNote(): Promise<string>
+  /** Fires when the vault contents change. Returns an unsubscribe function. */
+  onNotesChanged(callback: (change: NotesChanged) => void): () => void
   getHotkeyStatus(): Promise<HotkeyStatus>
   getVault(): Promise<VaultStatus>
   /** Open the folder picker. Resolves with the vault after the user picks or cancels. */

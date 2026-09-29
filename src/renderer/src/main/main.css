@@ -1,14 +1,162 @@
 :root {
   color-scheme: light dark;
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 13px;
+  --border: color-mix(in srgb, CanvasText 15%, transparent);
+  --muted: color-mix(in srgb, CanvasText 55%, transparent);
+  --hover: color-mix(in srgb, CanvasText 6%, transparent);
+  --selected: color-mix(in srgb, Highlight 30%, transparent);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: Canvas;
+  color: CanvasText;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.panes {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+}
+
+.sidebar header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar header button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sidebar .list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sidebar h2 {
+  margin: 0;
+  padding: 12px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sidebar .empty {
+  padding: 12px;
+  color: var(--muted);
+}
+
+.row {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.row.selected {
+  background: var(--selected);
+}
+
+.row span {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.row .title {
+  font-weight: 600;
+}
+
+.row .preview {
+  color: var(--muted);
 }
 
 main {
-  padding: 24px;
+  display: flex;
+  flex: 1;
+  min-width: 0;
 }
 
-.ok {
-  color: green;
+.editor-pane {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  padding: 16px 20px;
+}
+
+.editor-pane.hidden {
+  display: none;
+}
+
+.empty-state {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.app > footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.app > footer .vault {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+.app > footer button {
+  font-size: 11px;
 }
 
 .error {

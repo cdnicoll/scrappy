@@ -10,7 +10,11 @@ import './editor.css'
 
 export interface EditorHandle {
   getText(): string
-  setText(text: string): void
+  /**
+   * Replace the document with a fresh state, so undo never crosses into
+   * the previous document. Does not fire onChange.
+   */
+  setText(text: string, options?: { keepCursor?: boolean }): void
   focus(): void
 }
 
@@ -48,43 +52,44 @@ export function Editor({ ref, placeholderText, keys, onChange }: EditorProps) {
     onChangeRef.current = onChange
   }, [onChange])
 
+  const createState = useRef((doc: string, cursor: number): EditorState =>
+    EditorState.create({
+      doc,
+      selection: { anchor: Math.min(cursor, doc.length) },
+      extensions: [
+        Prec.highest(keymap.of([...(keysRef.current ?? [])])),
+        history(),
+        keymap.of([...defaultKeymap, ...historyKeymap]),
+        markdown({ base: markdownLanguage, codeLanguages: languages }),
+        syntaxHighlighting(markdownStyle),
+        EditorView.lineWrapping,
+        placeholder(placeholderText ?? ''),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) onChangeRef.current?.(update.state.doc.toString())
+        }),
+      ],
+    }),
+  )
+
   useEffect(() => {
     const view = new EditorView({
       parent: hostRef.current!,
-      state: EditorState.create({
-        doc: '',
-        extensions: [
-          Prec.highest(keymap.of([...(keysRef.current ?? [])])),
-          history(),
-          keymap.of([...defaultKeymap, ...historyKeymap]),
-          markdown({ base: markdownLanguage, codeLanguages: languages }),
-          syntaxHighlighting(markdownStyle),
-          EditorView.lineWrapping,
-          placeholder(placeholderText ?? ''),
-          EditorView.updateListener.of((update) => {
-            if (update.docChanged) onChangeRef.current?.(update.state.doc.toString())
-          }),
-        ],
-      }),
+      state: createState.current('', 0),
     })
     viewRef.current = view
     return () => {
       view.destroy()
       viewRef.current = null
     }
-    // The view is created once. Text changes go through the handle.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useImperativeHandle(ref, () => ({
     getText: () => viewRef.current?.state.doc.toString() ?? '',
-    setText: (text: string) => {
+    setText: (text, options) => {
       const view = viewRef.current
       if (!view) return
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: text },
-        selection: { anchor: text.length },
-      })
+      const cursor = options?.keepCursor ? view.state.selection.main.head : text.length
+      view.setState(createState.current(text, cursor))
     },
     focus: () => viewRef.current?.focus(),
   }))
