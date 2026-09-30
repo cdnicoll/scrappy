@@ -1,18 +1,18 @@
 # Scrappy
 
-Mac quick capture notes app. Electron, TypeScript, React, CodeMirror 6. Personal side project, one user: me.
+Mac quick capture notes app. Electron, TypeScript, React, CodeMirror 6. Open source (MIT), maintained by cdnicoll. Built for one person's daily use and kept deliberately small.
 
-**The spec is the source of truth: [SPEC.md](SPEC.md).** Read it before any work. If a change goes beyond it, say so and ask before building. Anything under "Non goals" or "Later" is out of scope unless I ask.
+**The spec is the source of truth: [SPEC.md](SPEC.md).** Read it before any work. If a change goes beyond it, say so and ask before building. Anything under "Non goals" or "Later" is out of scope unless the maintainer asks.
 
 ## Rules
 
-- Follow the build order in SPEC.md. Step 1 (hotkey plus a floating panel showing over a fullscreen app on another Space) is a spike: prove it before building anything else.
+- The floating panel over fullscreen apps on other Spaces is the load bearing feature. Any change to the panel, the hotkey, or window levels must be tested by hand against a fullscreen app on another Space.
 - Keep it small. No state library, no database, no UI kit. React state, plain CSS, `fs`.
 - Notes are plain `.md` files in the vault folder. Never write anything else into the vault.
 - Delete means `shell.trashItem`. Never hard delete a note.
 - Electron security defaults on every window: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`. Renderer talks to main only through a typed preload API.
 - Use the `electron-macos` skill for window, panel, hotkey, IPC and packaging work.
-- Commit only when I ask. No code signing or notarization for MVP.
+- Commit only when asked. Releases are unsigned until a Developer ID certificate exists; see the open issues.
 
 ## Commands
 
@@ -20,7 +20,7 @@ Mac quick capture notes app. Electron, TypeScript, React, CodeMirror 6. Personal
 - `npm run build`: typecheck, then build to `out/`
 - `npm run typecheck`
 - `npm run lint`
-- `npm run package`: build, then write the unsigned `dist/mac-arm64/Scrappy.app` (ad hoc signature, arm64)
+- `npm run package`: build, then write `dist/mac-arm64/Scrappy.app` (ad hoc signature, arm64)
 - `npx install-electron`: fetch the Electron binary if `npm install` skipped it
 
 Development knobs for `npm run dev`: `SCRAPPY_HOTKEY`, `SCRAPPY_LEVEL` (`floating` or `screen-saver`), `SCRAPPY_HIDE_ON_BLUR=0`, `SCRAPPY_USER_DATA` (separate settings folder, for testing against a scratch vault).
@@ -35,6 +35,10 @@ Development knobs for `npm run dev`: `SCRAPPY_HOTKEY`, `SCRAPPY_LEVEL` (`floatin
 - `resources/`: menu bar template icon, and `make-icon.mjs` which draws it.
 - `src/renderer/src/editor/`: CodeMirror editor shared by both windows.
 - `src/renderer/capture.html` and `src/renderer/src/capture/`: capture panel.
+
+## Contributor docs
+
+[README.md](README.md) is for users. [CONTRIBUTING.md](CONTRIBUTING.md) has setup, the same rules as above, and the development knobs in more detail.
 
 ## Voice
 

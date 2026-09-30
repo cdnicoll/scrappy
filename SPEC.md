@@ -1,10 +1,10 @@
 # Scrappy: MVP spec
 
-Status: draft, 2026-09-29
+Status: MVP built and in daily use, 2026-09-29. This document is the source of truth for what Scrappy does. Changes beyond it need an issue first; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Problem
 
-Through the day I open new VS Code windows to hold scraps: commands, snippets, quick notes. After about a week I close them and the context is gone. I want a fast place to capture that stays.
+Through the day, scraps pile up in new editor windows: commands, snippets, quick notes. After about a week the windows get closed and the context is gone. Scrappy is a fast place to capture that stays.
 
 ## Goal
 
@@ -83,8 +83,8 @@ A Mac app that captures a scrap in under two seconds from anywhere, keeps it as 
 
 ## Open questions
 
-- Default hotkey: check that `Ctrl+Option+Space` does not collide with my existing shortcuts (Raycast, input sources).
-- Code signing and notarization: skipped for MVP, since it is for my use only.
+- Default hotkey: `Ctrl+Option+Space` is free on a stock Mac. It may collide with launchers or input source switching on some setups; the hotkey is configurable.
+- Code signing and notarization: not in the MVP. Builds carry an ad hoc signature, so a downloaded copy needs Open Anyway in Privacy & Security once. Tracked as an issue.
 
 ## Later
 

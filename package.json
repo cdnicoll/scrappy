@@ -2,6 +2,13 @@
   "name": "scrappy",
   "version": "0.1.0",
   "description": "Mac quick capture notes app",
+  "author": "cdnicoll (https://github.com/cdnicoll)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cdnicoll/scrappy.git"
+  },
+  "homepage": "https://github.com/cdnicoll/scrappy",
   "private": true,
   "main": "./out/main/index.js",
   "scripts": {
