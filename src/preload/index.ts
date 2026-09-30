@@ -29,6 +29,7 @@ const api: ScrappyApi = {
   chooseVault: () => ipcRenderer.invoke(Channels.vaultChoose),
   setHotkey: (accelerator) => ipcRenderer.invoke(Channels.prefsSetHotkey, accelerator),
   setLaunchAtLogin: (enabled) => ipcRenderer.invoke(Channels.prefsSetLaunchAtLogin, enabled),
+  setShowDockIcon: (visible) => ipcRenderer.invoke(Channels.prefsSetShowDockIcon, visible),
   onPreferencesChanged: (callback) => subscribe(Channels.prefsChanged, callback),
 
   takePendingCommand: () => ipcRenderer.invoke(Channels.commandTake),

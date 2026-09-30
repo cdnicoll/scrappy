@@ -20,6 +20,7 @@ export const Channels = {
   prefsGet: 'prefs:get',
   prefsSetHotkey: 'prefs:set-hotkey',
   prefsSetLaunchAtLogin: 'prefs:set-launch-at-login',
+  prefsSetShowDockIcon: 'prefs:set-show-dock-icon',
   prefsChanged: 'prefs:changed',
   commandTake: 'command:take',
   command: 'command',
@@ -37,6 +38,8 @@ export interface Preferences {
   launchAtLogin: boolean
   /** False in development: the login item only works in the packaged app. */
   launchAtLoginActive: boolean
+  /** When false, Scrappy is reached from the menu bar icon only. */
+  showDockIcon: boolean
 }
 
 export type SetHotkeyResult = { ok: true } | { ok: false; error: string }
@@ -86,6 +89,7 @@ export interface ScrappyApi {
   chooseVault(): Promise<void>
   setHotkey(accelerator: string): Promise<SetHotkeyResult>
   setLaunchAtLogin(enabled: boolean): Promise<void>
+  setShowDockIcon(visible: boolean): Promise<void>
   onPreferencesChanged(callback: (preferences: Preferences) => void): Unsubscribe
 
   // Commands from the menu bar and app menu

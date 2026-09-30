@@ -220,6 +220,7 @@ function preferences(): Preferences {
     hotkey: { accelerator: wantedHotkey(), registered: activeHotkey === wantedHotkey() },
     launchAtLogin: settings.launchAtLogin,
     launchAtLoginActive: app.isPackaged,
+    showDockIcon: settings.showDockIcon,
   }
 }
 
@@ -254,6 +255,27 @@ function applyLaunchAtLogin(): void {
   // Only touch the login item when it differs. Removing one that is not there logs an error.
   if (app.getLoginItemSettings().openAtLogin !== settings.launchAtLogin) {
     app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin })
+  }
+}
+
+/**
+ * Show or hide the Dock icon. Hidden also removes Scrappy from the app switcher,
+ * so the menu bar icon becomes the way in.
+ */
+async function applyDockIcon(): Promise<void> {
+  if (!app.dock) return
+  if (settings.showDockIcon === app.dock.isVisible()) return
+  if (settings.showDockIcon) {
+    await app.dock.show()
+    return
+  }
+  const wasFocused = mainWindow?.isFocused() ?? false
+  app.dock.hide()
+  // Hiding the Dock icon drops the app to the background. Bring the window back.
+  if (wasFocused) {
+    app.focus({ steal: true })
+    mainWindow?.show()
+    mainWindow?.focus()
   }
 }
 
@@ -507,12 +529,19 @@ if (!app.requestSingleInstanceLock()) {
       await updateSettings({ launchAtLogin: enabled })
       applyLaunchAtLogin()
     })
+    ipcMain.handle(Channels.prefsSetShowDockIcon, async (_event, visible: unknown) => {
+      if (typeof visible !== 'boolean') return
+      await updateSettings({ showDockIcon: visible })
+      await applyDockIcon()
+    })
     ipcMain.handle(Channels.commandTake, () => {
       const command = pendingCommand
       pendingCommand = null
       return command
     })
 
+    // Before any window exists, so a hidden Dock icon never flashes at launch.
+    await applyDockIcon()
     Menu.setApplicationMenu(createAppMenu())
     panel = createPanel()
     mainWindow = createMainWindow()

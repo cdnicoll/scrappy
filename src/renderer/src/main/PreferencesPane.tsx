@@ -94,6 +94,18 @@ export function PreferencesPane({ preferences, onChooseVault, onClose }: Prefere
           <p className="hint">Saved, but it only takes effect in the packaged app.</p>
         )}
 
+        <label className="field">
+          <span className="label">Show Dock icon</span>
+          <input
+            type="checkbox"
+            checked={preferences.showDockIcon}
+            onChange={(event) => void window.scrappy.setShowDockIcon(event.target.checked)}
+          />
+        </label>
+        {!preferences.showDockIcon && (
+          <p className="hint">Open Scrappy from the menu bar icon.</p>
+        )}
+
         <footer>
           <button onClick={onClose}>Done</button>
         </footer>

@@ -62,7 +62,8 @@ A Mac app that captures a scrap in under two seconds from anywhere, keeps it as 
 - Menu bar icon with: New capture, Open Scrappy, Preferences, Quit.
 - Closing the main window keeps the app running so the hotkey still works.
 - Launch at login, on by default (`app.setLoginItemSettings`).
-- Preferences: vault folder, capture hotkey, launch at login.
+- Preferences: vault folder, capture hotkey, launch at login, show Dock icon.
+- Show Dock icon, on by default. When off, Scrappy has no Dock icon and is not in the app switcher; the menu bar icon is the way in. Added 2026-09-29, after the MVP build.
 
 ## Build order
 
