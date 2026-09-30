@@ -73,7 +73,12 @@ resources/               Menu bar template icon, and the script that draws it
 
 - One change per pull request.
 - Describe what changed and how you tested it.
+- Add a line under Unreleased in [CHANGELOG.md](CHANGELOG.md) for anything a user would notice.
 - Keep the voice of the app: direct, no emojis.
+
+## Security
+
+Found something that looks like a security problem? See [SECURITY.md](SECURITY.md) and report it privately.
 
 ## Working with Claude Code
 
