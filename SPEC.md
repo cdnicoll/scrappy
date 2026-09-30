@@ -8,7 +8,7 @@ Through the day, scraps pile up in new editor windows: commands, snippets, quick
 
 ## Goal
 
-A Mac app that captures a scrap in under two seconds from anywhere, keeps it as a plain Markdown file, and lets me find and edit it later.
+A Mac app that captures a scrap in under two seconds from anywhere, keeps it as a plain Markdown file, and lets you find and edit it later.
 
 ## Non goals (MVP)
 
@@ -71,11 +71,11 @@ A Mac app that captures a scrap in under two seconds from anywhere, keeps it as 
 2. Vault: pick a folder, save the setting, write a note from the panel.
 3. Main window: list, day headers, editor, autosave, watcher.
 4. Filter, trash, menu bar, launch at login, preferences.
-5. Package an unsigned `.app` for my own use.
+5. Package an unsigned `.app`.
 
 ## Acceptance
 
-- From any app, including fullscreen VS Code, hotkey then typing then `Cmd+Enter` saves a file in the vault in under two seconds, and I land back where I was.
+- From any app, including fullscreen VS Code, hotkey then typing then `Cmd+Enter` saves a file in the vault in under two seconds, and focus returns to where you were.
 - The note shows at the top of the main window list with the right title.
 - Editing in the main window changes the file on disk; editing the file in VS Code changes what the app shows.
 - Changing the vault folder in Preferences reloads the list from the new folder.
