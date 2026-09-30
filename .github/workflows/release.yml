@@ -1,0 +1,58 @@
+name: Release
+
+# Push a tag like v0.1.0 and this builds Scrappy.app on an Apple Silicon
+# runner, zips it, and attaches the zip to a GitHub release for that tag.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Cache the Electron download
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npm ci
+
+      - name: Check the tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "Tag v$tag does not match package.json version $version"
+            exit 1
+          fi
+
+      - name: Build and package
+        run: npm run package
+        env:
+          # Ad hoc signature only. Skip the keychain lookup for a certificate.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Zip the app
+        # ditto keeps symlinks and the signature intact, unlike plain zip.
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent dist/mac-arm64/Scrappy.app "Scrappy-${GITHUB_REF_NAME}-arm64.zip"
+          shasum -a 256 "Scrappy-${GITHUB_REF_NAME}-arm64.zip" > "Scrappy-${GITHUB_REF_NAME}-arm64.zip.sha256"
+
+      - name: Create the release
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "Scrappy-${GITHUB_REF_NAME}-arm64.zip" \
+            "Scrappy-${GITHUB_REF_NAME}-arm64.zip.sha256" \
+            --title "Scrappy $GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes "Apple Silicon only. The app is not notarized: after the first launch is blocked, open System Settings, Privacy & Security, and click Open Anyway. See the README."
+        env:
+          GH_TOKEN: ${{ github.token }}
