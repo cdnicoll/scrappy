@@ -4,6 +4,10 @@ A quick capture notes app for macOS. Press a hotkey from anywhere, type, press `
 
 Scrappy exists because opening a new editor window to hold a scrap of text is fast, but the scraps get lost. Scrappy keeps them, as plain files, with no database and no account.
 
+![The capture panel floating over the desktop with a short recipe note](docs/images/capture-panel.webp)
+
+![The main window: notes grouped by day in the sidebar, a release checklist open in the editor](docs/images/main-window.webp)
+
 ## What it does
 
 - **Capture from anywhere.** `Ctrl+Option+Space` opens a small floating panel over whatever you are doing, including fullscreen apps on other Spaces. `Cmd+Enter` saves. `Esc` hides and keeps what you typed as a draft.
