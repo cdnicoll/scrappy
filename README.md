@@ -13,6 +13,7 @@ Scrappy exists because opening a new editor window to hold a scrap of text is fa
 - **Capture from anywhere.** `Ctrl+Option+Space` opens a small floating panel over whatever you are doing, including fullscreen apps on other Spaces. `Cmd+Enter` saves. `Esc` hides and keeps what you typed as a draft.
 - **Plain files.** Every note is a `.md` file in a folder you pick. Edit them in any editor. Put the folder in git or a synced drive if you like. Scrappy notices outside changes.
 - **A small main window.** Notes grouped by day, a filter box, and a Markdown editor with light inline styling that saves as you type.
+- **Tags.** Add them from a bar in the capture panel or under the editor, with suggestions from your existing tags. Filter by `#tag`, or click a tag in the sidebar.
 - **Menu bar icon.** New capture, open the window, preferences, quit. Closing the window keeps the hotkey working.
 
 ## Install
@@ -35,6 +36,7 @@ Apple Silicon only for now.
 | Hide the capture and keep the draft | `Esc` |
 | New note in the main window | `Cmd+N` |
 | Move the selected note to the Trash | `Cmd+Backspace` with the note row focused |
+| Jump to the tag bar | `Cmd+T` |
 | Preferences | `Cmd+,` |
 
 Preferences hold the vault folder, the capture hotkey, launch at login, and whether to show the Dock icon.
@@ -42,7 +44,8 @@ Preferences hold the vault folder, the capture hotkey, launch at login, and whet
 ## How notes are stored
 
 - The vault is one folder. Notes are `.md` files directly in it. Scrappy never writes anything else there.
-- New notes are named by creation time, `2026-09-29-143501.md`, and never renamed. The title shown in the list is the first non empty line of the file.
+- New notes are named by creation time, `2026-09-29-143501.md`, and never renamed. The title shown in the list is the first non empty line of the note.
+- Tags live in a YAML front matter block at the top of each file, `tags: [work, ci]`. Scrappy writes the block on every save and leaves any other front matter lines alone. Files without a block work fine and get one when you next edit them in Scrappy.
 - The list is sorted by modified time. Editing a note moves it to the top.
 - Deleting moves the file to the macOS Trash. Nothing is deleted outright.
 - Settings and the capture draft live in `~/Library/Application Support/scrappy`, outside the vault.

@@ -1,6 +1,6 @@
 {
   "name": "scrappy",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Mac quick capture notes app",
   "author": "cdnicoll (https://github.com/cdnicoll)",
   "license": "MIT",
@@ -18,7 +18,8 @@
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint .",
-    "package": "npm run build && electron-builder --mac dir --arm64"
+    "package": "npm run build && electron-builder --mac dir --arm64",
+    "install-app": "npm run package && osascript -e 'quit app \"Scrappy\"' && rm -rf /Applications/Scrappy.app && cp -R dist/mac-arm64/Scrappy.app /Applications/ && open /Applications/Scrappy.app"
   },
   "dependencies": {
     "chokidar": "^4.0.3"
@@ -61,6 +62,7 @@
     ],
     "electronDist": "node_modules/electron/dist",
     "mac": {
+      "icon": "resources/icon.icns",
       "category": "public.app-category.productivity",
       "target": [
         {

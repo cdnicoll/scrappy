@@ -1,3 +1,4 @@
+import type { TagCount } from '../../../shared/ipc'
 import { dayLabel, type NoteSummary } from '../../../shared/notes'
 
 interface SidebarProps {
@@ -5,6 +6,9 @@ interface SidebarProps {
   selected: string | null
   filter: string
   onFilter: (text: string) => void
+  tagCounts: TagCount[]
+  /** Click on a tag chip: add or remove its `#tag` word in the filter. */
+  onToggleTag: (tag: string) => void
   onSelect: (filename: string) => void
   onNew: () => void
 }
@@ -27,7 +31,25 @@ function groupByDay(notes: NoteSummary[]): DayGroup[] {
   return groups
 }
 
-export function Sidebar({ notes, selected, filter, onFilter, onSelect, onNew }: SidebarProps) {
+const MAX_TAG_CHIPS = 24
+
+export function Sidebar({
+  notes,
+  selected,
+  filter,
+  onFilter,
+  tagCounts,
+  onToggleTag,
+  onSelect,
+  onNew,
+}: SidebarProps) {
+  const activeTags = new Set(
+    filter
+      .split(/\s+/)
+      .filter((w) => w.startsWith('#'))
+      .map((w) => w.slice(1)),
+  )
+
   return (
     <nav className="sidebar">
       <header>
@@ -48,6 +70,20 @@ export function Sidebar({ notes, selected, filter, onFilter, onSelect, onNew }: 
           if (event.key === 'Escape') onFilter('')
         }}
       />
+      {tagCounts.length > 0 && (
+        <div className="tag-row" aria-label="Filter by tag">
+          {tagCounts.slice(0, MAX_TAG_CHIPS).map(({ tag, count }) => (
+            <button
+              key={tag}
+              className={activeTags.has(tag) ? 'chip active' : 'chip'}
+              title={`${count} ${count === 1 ? 'note' : 'notes'}`}
+              onClick={() => onToggleTag(tag)}
+            >
+              #{tag}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="list">
         {notes.length === 0 && (
           <p className="empty">{filter.trim() === '' ? 'No notes yet' : 'No matches'}</p>
@@ -63,6 +99,9 @@ export function Sidebar({ notes, selected, filter, onFilter, onSelect, onNew }: 
               >
                 <span className="title">{note.title}</span>
                 <span className="preview">{note.preview || ' '}</span>
+                {note.tags.length > 0 && (
+                  <span className="tags">{note.tags.map((tag) => `#${tag}`).join(' ')}</span>
+                )}
               </button>
             ))}
           </section>

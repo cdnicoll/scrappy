@@ -10,6 +10,7 @@ export const Channels = {
   notesCreate: 'notes:create',
   notesSearch: 'notes:search',
   notesTrash: 'notes:trash',
+  notesTags: 'notes:tags',
   notesChanged: 'notes:changed',
   captureHide: 'capture:hide',
   captureSubmit: 'capture:submit',
@@ -25,6 +26,17 @@ export const Channels = {
   commandTake: 'command:take',
   command: 'command',
 } as const
+
+/** A note split into its parts. The front matter block itself stays in the main process. */
+export interface NoteContent {
+  body: string
+  tags: string[]
+}
+
+export interface TagCount {
+  tag: string
+  count: number
+}
 
 export interface HotkeyStatus {
   accelerator: string
@@ -66,19 +78,25 @@ export interface ScrappyApi {
    * Save the text as a new note and hide the panel.
    * Empty text writes nothing and returns a null filename.
    */
-  submitCapture(text: string): Promise<SubmitResult>
+  submitCapture(text: string, tags: string[]): Promise<SubmitResult>
   onCaptureShown(callback: () => void): Unsubscribe
   getDraft(): Promise<string>
   setDraft(text: string): Promise<void>
 
   // Notes
   listNotes(): Promise<NoteSummary[]>
-  readNote(filename: string): Promise<string>
-  writeNote(filename: string, text: string): Promise<void>
+  readNote(filename: string): Promise<NoteContent>
+  /** Save body and tags. Front matter is written on every save. */
+  writeNote(filename: string, body: string, tags: string[]): Promise<void>
   /** Create an empty note and return its filename. */
   createNote(): Promise<string>
-  /** Filenames of notes whose title or body contains the text, case insensitive. */
+  /**
+   * Filenames matching the filter. Words starting with `#` must match a tag
+   * by prefix. The rest must appear in the body or tags, case insensitive.
+   */
   searchNotes(query: string): Promise<string[]>
+  /** Every tag in the vault with how many notes use it, most used first. */
+  listTags(): Promise<TagCount[]>
   /** Ask to confirm, then move the note to the Trash. False when cancelled. */
   trashNote(filename: string): Promise<boolean>
   onNotesChanged(callback: (change: NotesChanged) => void): Unsubscribe

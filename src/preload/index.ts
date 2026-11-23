@@ -12,17 +12,19 @@ function subscribe<T>(channel: string, callback: (payload: T) => void): () => vo
 
 const api: ScrappyApi = {
   hideCapture: () => ipcRenderer.invoke(Channels.captureHide),
-  submitCapture: (text) => ipcRenderer.invoke(Channels.captureSubmit, text),
+  submitCapture: (text, tags) => ipcRenderer.invoke(Channels.captureSubmit, text, tags),
   onCaptureShown: (callback) => subscribe<void>(Channels.captureShown, () => callback()),
   getDraft: () => ipcRenderer.invoke(Channels.draftGet),
   setDraft: (text) => ipcRenderer.invoke(Channels.draftSet, text),
 
   listNotes: () => ipcRenderer.invoke(Channels.notesList),
   readNote: (filename) => ipcRenderer.invoke(Channels.notesRead, filename),
-  writeNote: (filename, text) => ipcRenderer.invoke(Channels.notesWrite, filename, text),
+  writeNote: (filename, body, tags) =>
+    ipcRenderer.invoke(Channels.notesWrite, filename, body, tags),
   createNote: () => ipcRenderer.invoke(Channels.notesCreate),
   searchNotes: (query) => ipcRenderer.invoke(Channels.notesSearch, query),
   trashNote: (filename) => ipcRenderer.invoke(Channels.notesTrash, filename),
+  listTags: () => ipcRenderer.invoke(Channels.notesTags),
   onNotesChanged: (callback) => subscribe(Channels.notesChanged, callback),
 
   getPreferences: () => ipcRenderer.invoke(Channels.prefsGet),

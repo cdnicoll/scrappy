@@ -7,6 +7,7 @@ export interface NoteSummary {
   filename: string
   title: string
   preview: string
+  tags: string[]
   /** File modified time in ms. The list sorts on this, newest first. */
   mtimeMs: number
 }

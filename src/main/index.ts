@@ -17,6 +17,7 @@ import { join } from 'node:path'
 import trayIconPath from '../../resources/iconTemplate.png?asset'
 import trayIcon2xPath from '../../resources/iconTemplate@2x.png?asset'
 import { isValidAccelerator } from '../shared/accelerator'
+import { composeNote, MAX_TAGS, MAX_TAG_LENGTH, normalizeTags } from '../shared/frontmatter'
 import {
   Channels,
   type AppCommand,
@@ -37,6 +38,7 @@ import {
   isDirectory,
   isNoteFilename,
   listNotes,
+  listTags,
   notePath,
   readNote,
   searchNotes,
@@ -113,9 +115,17 @@ function createPanel(): BrowserWindow {
     minimizable: false,
     maximizable: false,
     hiddenInMissionControl: true,
-    webPreferences: securePrefs,
+    // Blurred desktop behind a translucent panel. Active so it never looks dimmed.
+    vibrancy: 'hud',
+    visualEffectState: 'active',
+    backgroundColor: '#00000000', // The page paints its own tint over the vibrancy.
+    titleBarStyle: 'hidden', // Required alongside frame: false when vibrancy is set.
+    // The draft saves on a short timer. Hidden windows throttle timers, which
+    // could lose the last edit if the app quits right after the panel hides.
+    webPreferences: { ...securePrefs, backgroundThrottling: false },
   })
 
+  win.setWindowButtonVisibility(false) // titleBarStyle brings the traffic lights back
   win.setAlwaysOnTop(true, LEVEL)
   // skipTransformProcessType keeps the Dock icon: without it Electron flips the
   // app to a UI element app, which hides the Dock icon and the main window.
@@ -147,6 +157,8 @@ function createMainWindow(): BrowserWindow {
     minWidth: 640,
     minHeight: 400,
     title: 'Scrappy',
+    vibrancy: 'sidebar',
+    backgroundColor: '#00000000', // The page paints its own tint over the vibrancy.
     webPreferences: securePrefs,
   })
   win.on('closed', () => {
@@ -441,11 +453,20 @@ async function promptForVault(): Promise<void> {
   }
 }
 
-async function submitCapture(text: unknown): Promise<SubmitResult> {
+/** Tags from the renderer: an array of short strings, normalized. */
+function validTags(tags: unknown): string[] | null {
+  if (!Array.isArray(tags) || tags.length > MAX_TAGS) return null
+  if (!tags.every((tag) => typeof tag === 'string' && tag.length <= MAX_TAG_LENGTH * 2)) return null
+  return normalizeTags(tags as string[])
+}
+
+async function submitCapture(text: unknown, rawTags: unknown): Promise<SubmitResult> {
   if (typeof text !== 'string' || text.length > MAX_NOTE_CHARS) {
     return { ok: false, error: 'Note is not valid text or is too large.' }
   }
-  if (text.trim() === '') {
+  const tags = validTags(rawTags)
+  if (!tags) return { ok: false, error: 'Tags are not valid.' }
+  if (text.trim() === '' && tags.length === 0) {
     hidePanel()
     return { ok: true, filename: null }
   }
@@ -453,7 +474,7 @@ async function submitCapture(text: unknown): Promise<SubmitResult> {
     return { ok: false, error: 'No vault folder set. Open Scrappy to choose one.' }
   }
   try {
-    const filename = await createNote(settings.vaultPath, text)
+    const filename = await createNote(settings.vaultPath, composeNote({ tags, body: text }))
     markOwnWrite(filename)
     await writeFileAtomic(draftFile(), '')
     hidePanel()
@@ -481,7 +502,9 @@ if (!app.requestSingleInstanceLock()) {
     settings = await loadSettings(settingsFile())
 
     ipcMain.handle(Channels.captureHide, () => hidePanel())
-    ipcMain.handle(Channels.captureSubmit, (_event, text: unknown) => submitCapture(text))
+    ipcMain.handle(Channels.captureSubmit, (_event, text: unknown, tags: unknown) =>
+      submitCapture(text, tags),
+    )
     ipcMain.handle(Channels.draftGet, () => readDraft())
     ipcMain.handle(Channels.draftSet, async (_event, text: unknown) => {
       if (typeof text === 'string' && text.length <= MAX_NOTE_CHARS) {
@@ -495,18 +518,23 @@ if (!app.requestSingleInstanceLock()) {
       if (!isNoteFilename(filename)) throw new Error('Not a note filename.')
       return readNote(requireVault(), filename)
     })
-    ipcMain.handle(Channels.notesWrite, async (_event, filename: unknown, text: unknown) => {
-      if (!isNoteFilename(filename)) throw new Error('Not a note filename.')
-      if (typeof text !== 'string' || text.length > MAX_NOTE_CHARS) {
-        throw new Error('Note is not valid text or is too large.')
-      }
-      markOwnWrite(filename)
-      await writeNote(requireVault(), filename, text)
-      markOwnWrite(filename)
-      void pushNotes()
-    })
+    ipcMain.handle(
+      Channels.notesWrite,
+      async (_event, filename: unknown, body: unknown, rawTags: unknown) => {
+        if (!isNoteFilename(filename)) throw new Error('Not a note filename.')
+        if (typeof body !== 'string' || body.length > MAX_NOTE_CHARS) {
+          throw new Error('Note is not valid text or is too large.')
+        }
+        const tags = validTags(rawTags)
+        if (!tags) throw new Error('Tags are not valid.')
+        markOwnWrite(filename)
+        await writeNote(requireVault(), filename, { body, tags })
+        markOwnWrite(filename)
+        void pushNotes()
+      },
+    )
     ipcMain.handle(Channels.notesCreate, async () => {
-      const filename = await createNote(requireVault(), '')
+      const filename = await createNote(requireVault(), composeNote({ tags: [], body: '' }))
       markOwnWrite(filename)
       await pushNotes()
       return filename
@@ -517,6 +545,7 @@ if (!app.requestSingleInstanceLock()) {
         : [],
     )
     ipcMain.handle(Channels.notesTrash, (_event, filename: unknown) => trashNote(filename))
+    ipcMain.handle(Channels.notesTags, () => (settings.vaultPath ? listTags(settings.vaultPath) : []))
     ipcMain.handle(Channels.vaultChoose, async () => {
       await pickVaultFolder()
     })

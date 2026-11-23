@@ -30,10 +30,10 @@ Development knobs for `npm run dev`: `SCRAPPY_HOTKEY`, `SCRAPPY_LEVEL` (`floatin
 - `src/main/index.ts`: main process. Windows, capture panel, global hotkey, menu bar icon, app menu, IPC handlers.
 - `src/main/settings.ts`: settings JSON in the app data folder. `src/main/vault.ts`: list, read, and atomic writes of notes. `src/main/watcher.ts`: chokidar watch on the vault.
 - `src/preload/index.ts`: typed API exposed as `window.scrappy`.
-- `src/shared/ipc.ts`: IPC channel names and payload types. `src/shared/notes.ts`: title, preview, and day label helpers. `src/shared/accelerator.ts`: hotkey strings.
+- `src/shared/ipc.ts`: IPC channel names and payload types. `src/shared/notes.ts`: title, preview, and day label helpers. `src/shared/accelerator.ts`: hotkey strings. `src/shared/frontmatter.ts`: tags in YAML front matter.
 - `src/renderer/index.html` and `src/renderer/src/main/`: main window.
 - `resources/`: menu bar template icon, and `make-icon.mjs` which draws it.
-- `src/renderer/src/editor/`: CodeMirror editor shared by both windows.
+- `src/renderer/src/editor/`: CodeMirror editor shared by both windows. `src/renderer/src/tags/`: tag bar.
 - `src/renderer/capture.html` and `src/renderer/src/capture/`: capture panel.
 
 ## Contributor docs

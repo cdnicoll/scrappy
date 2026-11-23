@@ -4,6 +4,19 @@ All notable changes to Scrappy. The format follows [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-23
+
+### Added
+
+- Tags. A tag bar in the capture panel and under the main editor, with suggestions from the vault. Filter by `#tag` and click tags in the sidebar. Tags are stored as YAML front matter, which Scrappy now writes on every note.
+- Dark mode uses the Dracula palette. Light mode keeps a plain palette. Both follow the system setting.
+- Both windows are slightly translucent with the desktop blurred behind them, using macOS vibrancy.
+- `npm run install-app` builds the app and replaces the copy in /Applications.
+
+### Changed
+
+- Scrappy has a new Dock icon and a matching menu bar icon.
+
 ## [0.1.0] - 2026-09-30
 
 First release.
@@ -22,5 +35,6 @@ First release.
 - `Tab` indents in both editors.
 - Unsigned Apple Silicon build, published as a zip on each `v*` tag.
 
-[Unreleased]: https://github.com/cdnicoll/scrappy/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/cdnicoll/scrappy/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/cdnicoll/scrappy/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cdnicoll/scrappy/releases/tag/v0.1.0

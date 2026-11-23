@@ -63,9 +63,11 @@ src/preload/index.ts     The typed API exposed to the renderer as window.scrappy
 src/shared/ipc.ts        IPC channel names and payload types
 src/shared/notes.ts      Title, preview, and day label helpers
 src/shared/accelerator.ts Hotkey strings
+src/shared/frontmatter.ts YAML front matter: parse and compose tags
 src/renderer/index.html, src/renderer/src/main/      Main window
 src/renderer/capture.html, src/renderer/src/capture/ Capture panel
 src/renderer/src/editor/ CodeMirror editor shared by both windows
+src/renderer/src/tags/   Tag bar with suggestions, shared by both windows
 resources/               Menu bar template icon, and the script that draws it
 ```
 

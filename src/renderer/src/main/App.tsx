@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { AppCommand, NotesChanged, Preferences } from '../../../shared/ipc'
+import type { AppCommand, NotesChanged, Preferences, TagCount } from '../../../shared/ipc'
 import type { NoteSummary } from '../../../shared/notes'
 import { Editor, type EditorHandle } from '../editor/Editor'
+import { TagBar, type TagBarHandle } from '../tags/TagBar'
 import { PreferencesPane } from './PreferencesPane'
 import { Sidebar } from './Sidebar'
 
@@ -9,7 +10,8 @@ const AUTOSAVE_DELAY_MS = 500
 
 interface PendingSave {
   filename: string
-  text: string
+  body: string
+  tags: string[]
   timer: number
 }
 
@@ -19,6 +21,8 @@ export function App() {
   const [preferences, setPreferences] = useState<Preferences | null>(null)
   const [showPreferences, setShowPreferences] = useState(false)
   const [notes, setNotes] = useState<NoteSummary[]>([])
+  const [tagCounts, setTagCounts] = useState<TagCount[]>([])
+  const [tags, setTags] = useState<string[]>([])
   const [filter, setFilter] = useState('')
   /** Filenames matching the filter, or null when the filter is empty. */
   const [matches, setMatches] = useState<Set<string> | null>(null)
@@ -26,9 +30,16 @@ export function App() {
   const [error, setError] = useState<string | null>(null)
 
   const editorRef = useRef<EditorHandle>(null)
-  // Mirrors `selected` for callbacks that outlive a render.
+  const tagBarRef = useRef<TagBarHandle>(null)
+  // Mirror `selected` and `tags` for callbacks that outlive a render.
   const selectedRef = useRef<string | null>(null)
+  const tagsRef = useRef<string[]>([])
   const pendingRef = useRef<PendingSave | null>(null)
+
+  const showTags = useCallback((next: string[]): void => {
+    tagsRef.current = next
+    setTags(next)
+  }, [])
 
   /** Write the pending edit now. Safe to call with nothing pending. */
   const flush = useCallback(async (): Promise<void> => {
@@ -37,7 +48,7 @@ export function App() {
     window.clearTimeout(pending.timer)
     pendingRef.current = null
     try {
-      await window.scrappy.writeNote(pending.filename, pending.text)
+      await window.scrappy.writeNote(pending.filename, pending.body, pending.tags)
       setError(null)
     } catch (caught) {
       setError(`Could not save ${pending.filename}: ${message(caught)}`)
@@ -55,17 +66,18 @@ export function App() {
       await flush()
       select(filename)
       try {
-        const text = await window.scrappy.readNote(filename)
+        const note = await window.scrappy.readNote(filename)
         // Ignore the result if another note was opened while this one loaded.
         if (selectedRef.current !== filename) return
-        editorRef.current?.setText(text)
+        editorRef.current?.setText(note.body)
+        showTags(note.tags)
         setError(null)
       } catch (caught) {
         if (selectedRef.current === filename) select(null)
         setError(`Could not open ${filename}: ${message(caught)}`)
       }
     },
-    [flush, select],
+    [flush, select, showTags],
   )
 
   const newNote = useCallback(async (): Promise<void> => {
@@ -82,6 +94,7 @@ export function App() {
   const onNotesChanged = useCallback(
     ({ notes: next, external }: NotesChanged): void => {
       setNotes(next)
+      void window.scrappy.listTags().then(setTagCounts)
       const current = selectedRef.current
       if (!current) return
 
@@ -91,6 +104,7 @@ export function App() {
         pendingRef.current = null
         select(null)
         editorRef.current?.setText('')
+        showTags([])
         return
       }
 
@@ -98,16 +112,17 @@ export function App() {
       if (external.includes(current) && !pendingRef.current) {
         void window.scrappy
           .readNote(current)
-          .then((text) => {
+          .then((note) => {
             if (selectedRef.current !== current || pendingRef.current) return
-            if (editorRef.current?.getText() !== text) {
-              editorRef.current?.setText(text, { keepCursor: true })
+            if (editorRef.current?.getText() !== note.body) {
+              editorRef.current?.setText(note.body, { keepCursor: true })
             }
+            showTags(note.tags)
           })
           .catch((caught: unknown) => setError(`Could not reload ${current}: ${message(caught)}`))
       }
     },
-    [select],
+    [select, showTags],
   )
 
   const trashSelected = useCallback(async (): Promise<void> => {
@@ -133,6 +148,7 @@ export function App() {
   useEffect(() => {
     void window.scrappy.getPreferences().then(setPreferences)
     void window.scrappy.listNotes().then(setNotes)
+    void window.scrappy.listTags().then(setTagCounts)
     const stopPreferences = window.scrappy.onPreferencesChanged(setPreferences)
     const stopNotes = window.scrappy.onNotesChanged(onNotesChanged)
     return () => {
@@ -166,6 +182,11 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.metaKey && event.key.toLowerCase() === 't' && selectedRef.current) {
+        event.preventDefault()
+        tagBarRef.current?.focus()
+        return
+      }
       if (event.key !== 'Backspace' || !event.metaKey) return
       // In the editor or a text field, Cmd+Backspace deletes text.
       const focused = document.activeElement
@@ -182,15 +203,33 @@ export function App() {
     }
   }, [trashSelected, flush])
 
-  function onEditorChange(text: string): void {
+  function scheduleSave(body: string, noteTags: string[]): void {
     const filename = selectedRef.current
     if (!filename) return
     if (pendingRef.current) window.clearTimeout(pendingRef.current.timer)
     pendingRef.current = {
       filename,
-      text,
+      body,
+      tags: noteTags,
       timer: window.setTimeout(() => void flush(), AUTOSAVE_DELAY_MS),
     }
+  }
+
+  function onEditorChange(text: string): void {
+    scheduleSave(text, tagsRef.current)
+  }
+
+  function onTagsChange(next: string[]): void {
+    showTags(next)
+    scheduleSave(editorRef.current?.getText() ?? '', next)
+  }
+
+  /** Add or remove a `#tag` word in the filter box. */
+  function toggleTagFilter(tag: string): void {
+    const words = filter.split(/\s+/).filter(Boolean)
+    const word = `#${tag}`
+    const next = words.includes(word) ? words.filter((w) => w !== word) : [...words, word]
+    setFilter(next.join(' '))
   }
 
   async function chooseVault(): Promise<void> {
@@ -210,12 +249,23 @@ export function App() {
           selected={selected}
           filter={filter}
           onFilter={setFilter}
+          tagCounts={tagCounts}
+          onToggleTag={toggleTagFilter}
           onSelect={(filename) => void openNote(filename)}
           onNew={() => void newNote()}
         />
         <main>
           <div className={selected ? 'editor-pane' : 'editor-pane hidden'}>
             <Editor ref={editorRef} onChange={onEditorChange} placeholderText="Start typing" />
+            <div className="note-tags">
+              <TagBar
+                ref={tagBarRef}
+                tags={tags}
+                onChange={onTagsChange}
+                suggestions={tagCounts.map((c) => c.tag)}
+              />
+              <span className="hint">Cmd+T</span>
+            </div>
           </div>
           {!selected && (
             <div className="empty-state">

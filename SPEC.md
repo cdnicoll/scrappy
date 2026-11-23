@@ -13,7 +13,7 @@ A Mac app that captures a scrap in under two seconds from anywhere, keeps it as 
 ## Non goals (MVP)
 
 - Sync, accounts, cloud anything
-- Tags, folders, links between notes
+- Folders, links between notes
 - Rendered preview mode, themes, plugins
 - iOS, Windows, Linux
 - Search beyond a simple filter (see Later)
@@ -32,7 +32,17 @@ A Mac app that captures a scrap in under two seconds from anywhere, keeps it as 
 - First launch: prompt to choose or create a folder. Default suggestion `~/Scrappy`.
 - Vault path lives in settings. It can be changed in Preferences, and the app reloads from the new folder.
 - Filename: `YYYY-MM-DD-HHmmss.md`, set at creation and never renamed. Title comes from content, not the filename.
-- Title: the first non empty line, with leading `#` stripped, cut to 60 characters. Empty note shows "Untitled".
+- Every note Scrappy writes starts with a YAML front matter block holding its tags:
+
+  ```
+  ---
+  tags: [work, ci]
+  ---
+  # Title
+  ```
+
+  Only `tags` is understood. Other lines in the block are kept as they are. A note without a block, for example one created in another editor, reads as having no tags and gains a block the next time Scrappy saves it. The block is never shown in the editor.
+- Title: the first non empty line of the body, after the front matter, with leading `#` stripped, cut to 60 characters. Empty note shows "Untitled".
 - Sort key: file modified time, newest first.
 - External edits (VS Code, git, Finder) are picked up by the watcher. Last write wins; no conflict handling in MVP.
 
@@ -46,6 +56,17 @@ A Mac app that captures a scrap in under two seconds from anywhere, keeps it as 
 - Empty content on save: just hide, write nothing.
 - Hotkey pressed while the panel is open: hide it.
 - Implementation: create the panel window once at startup and keep it hidden; show and hide it, never recreate it. Use `type: 'panel'`, `alwaysOnTop` at level `floating` or higher, `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })`, frameless, not shown in the Dock or app switcher.
+
+## Feature 1b: Tags
+
+Added 2026-10-02, after the MVP build.
+
+- A tag is lower case letters, digits, `-` and `_`. Input is normalized: `#`, case and spaces are dropped or folded.
+- The capture panel has a tag bar along the bottom. `Cmd+T` moves there. Typing shows matching tags from the vault, most used first; `Enter`, `Tab` or `,` adds, `Backspace` on an empty field removes the last tag, `Cmd+Enter` saves from there too.
+- The main window has the same bar under the editor for the open note. Tag changes autosave like text.
+- The sidebar shows the vault's tags as chips under the filter box. Clicking one adds or removes `#tag` in the filter. In the filter, every `#word` must match a tag by prefix, and the rest must appear in the body or a tag.
+- Rows show their tags under the preview.
+- The draft keeps its tags.
 
 ## Feature 2: Main window
 
@@ -64,6 +85,12 @@ A Mac app that captures a scrap in under two seconds from anywhere, keeps it as 
 - Launch at login, on by default (`app.setLoginItemSettings`).
 - Preferences: vault folder, capture hotkey, launch at login, show Dock icon.
 - Show Dock icon, on by default. When off, Scrappy has no Dock icon and is not in the app switcher; the menu bar icon is the way in. Added 2026-09-29, after the MVP build.
+
+## Appearance
+
+- Follows the system light or dark setting. No theme picker.
+- Dark uses the Dracula palette. Light is a plain, GitHub like palette.
+- Both windows use macOS vibrancy: surfaces are slightly translucent and the desktop shows through, blurred. Added 2026-09-30, after the MVP build. "Themes" under Non goals means user selectable themes.
 
 ## Build order
 
